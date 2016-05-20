@@ -64,6 +64,14 @@ private[sql] class DiskPartition (
    */
   def insert(row: Row) = {
     // IMPLEMENT ME
+    data.add(row)
+    if(measurePartitionSize > blockSize){
+      data.remove(row)
+      spillPartitionToDisk()
+      data.clear()
+      data.add(row)
+    }
+    null
   }
 
   /**
@@ -107,11 +115,20 @@ private[sql] class DiskPartition (
 
       override def next() = {
         // IMPLEMENT ME
+        if(fetchNextChunk){
+          data.addAll(CS143Utils.getListFromBytes(byteArray))
+          byteArray = null
+        }
+        else
+        throw new SparkException("Iterator reach the bottom")
         null
       }
 
       override def hasNext() = {
         // IMPLEMENT ME
+        if(chunkSizeIterator.hasNext)
+          true
+        else
         false
       }
 
@@ -123,7 +140,13 @@ private[sql] class DiskPartition (
        */
       private[this] def fetchNextChunk(): Boolean = {
         // IMPLEMENT ME
+        if(chunkSizeIterator.hasNext){
+            byteArray=CS143Utils.getNextChunkBytes(inStream, chunkSizeIterator.next(),byteArray)
+            true
+        }
+        else{
         false
+        }
       }
     }
   }
@@ -138,6 +161,16 @@ private[sql] class DiskPartition (
   def closeInput() = {
     // IMPLEMENT ME
     inputClosed = true
+    if(!data.isEmpty())
+      spillPartitionToDisk() 
+
+    // try{
+    //   inStream.close()
+    // }catch{
+    //   case ex:IOException => println("Closing Error")
+    // }finally{
+    //   inStream.close()
+    // }
   }
 
 
