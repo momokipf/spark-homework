@@ -115,21 +115,17 @@ private[sql] class DiskPartition (
 
       override def next() = {
         // IMPLEMENT ME
-        if(fetchNextChunk){
-          data.addAll(CS143Utils.getListFromBytes(byteArray))
-          byteArray = null
-        }
-        else
-        throw new SparkException("Iterator reach the bottom")
-        null
+          if(currentIterator.hasNext)
+            currentIterator.next
+          else {
+          throw new SparkException("Iterator reach the bottom")
+          null
+          }
       }
 
       override def hasNext() = {
         // IMPLEMENT ME
-        if(chunkSizeIterator.hasNext)
-          true
-        else
-        false
+        currentIterator.hasNext||fetchNextChunk
       }
 
       /**
@@ -142,6 +138,7 @@ private[sql] class DiskPartition (
         // IMPLEMENT ME
         if(chunkSizeIterator.hasNext){
             byteArray=CS143Utils.getNextChunkBytes(inStream, chunkSizeIterator.next(),byteArray)
+            currentIterator = CS143Utils.getListFromBytes(byteArray).iterator.asScala 
             true
         }
         else{
