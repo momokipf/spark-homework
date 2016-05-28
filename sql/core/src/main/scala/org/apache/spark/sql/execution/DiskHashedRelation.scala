@@ -37,11 +37,19 @@ protected [sql] final class GeneralDiskHashedRelation(partitions: Array[DiskPart
 
   override def getIterator() = {
     // IMPLEMENT ME
+    if(partitions.length!=0){
+      partitions.iterator
+    }
+    else
     null
   }
 
   override def closeAllPartitions() = {
     // IMPLEMENT ME
+    for(i <- 0 to partitions.length-1){
+      partitions(i).closePartition
+    }
+
   }
 }
 
@@ -64,14 +72,17 @@ private[sql] class DiskPartition (
    */
   def insert(row: Row) = {
     // IMPLEMENT ME
-    data.add(row)
-    if(measurePartitionSize > blockSize){
-      data.remove(row)
-      spillPartitionToDisk()
-      data.clear()
+    if(!inputClosed){
       data.add(row)
+      if(measurePartitionSize > blockSize){
+        data.remove(row)
+        spillPartitionToDisk()
+        data.clear()
+        data.add(row)
+      }
     }
-    null
+    else 
+      throw new SparkException("Should not be inserting to file after closing input. Bad things will happen!")
   }
 
   /**
@@ -106,6 +117,7 @@ private[sql] class DiskPartition (
   def getData(): Iterator[Row] = {
     if (!inputClosed) {
       throw new SparkException("Should not be reading from file before closing input. Bad things will happen!")
+      null
     }
 
     new Iterator[Row] {
@@ -158,9 +170,10 @@ private[sql] class DiskPartition (
   def closeInput() = {
     // IMPLEMENT ME
     inputClosed = true
-    if(!data.isEmpty())
+    if(!data.isEmpty()){
       spillPartitionToDisk() 
-
+      data.clear()
+    }
     // try{
     //   inStream.close()
     // }catch{
@@ -182,6 +195,7 @@ private[sql] class DiskPartition (
 
 private[sql] object DiskHashedRelation {
 
+  //private val DiskPartitiontable: JavaArrayList[DiskPartition] = new JavaArrayList[DiskPartition]
   /**
    * Given an input iterator, partitions each row into one of a number of [[DiskPartition]]s
    * and constructors a [[DiskHashedRelation]].
@@ -204,6 +218,22 @@ private[sql] object DiskHashedRelation {
                 size: Int = 64,
                 blockSize: Int = 64000) = {
     // IMPLEMENT ME
-    null
+    val DiskPartitiontable : Array[DiskPartition] = new Array[DiskPartition](size)
+
+    for( i <- 0 to size-1){
+       DiskPartitiontable(i) = new DiskPartition(i.toString,blockSize)
+    }
+    while(input.hasNext){
+      val row: Row = keyGenerator(input.next)
+      val index = row.hashCode() % 3 
+      DiskPartitiontable(index).insert(row)
+    }
+
+    for(i <-0 to size-1){
+      DiskPartitiontable(i).closeInput
+    }
+    val GenerealDR : GeneralDiskHashedRelation = new GeneralDiskHashedRelation(DiskPartitiontable)
+    GenerealDR
+    //null
   }
 }
